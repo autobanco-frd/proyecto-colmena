@@ -21,18 +21,21 @@
 
     <script>
       AFRAME.registerComponent('chromakey', {
-        schema: { 
-          color: {type: 'color', default: '0 1 0'},
-          threshold: {type: 'number', default: 0.8}
+        schema: {
+          color: {type: 'color', default: '#00ff00'},
+          threshold: {type: 'float', default: 0.3},
+          padding: {type: 'float', default: 0.1}
         },
         init: function () {
           const video = document.querySelector('#bee-vid');
           const texture = new THREE.VideoTexture(video);
+          
           this.material = new THREE.ShaderMaterial({
             uniforms: {
               tex: { value: texture },
-              color: { value: new THREE.Color(this.data.color) },
-              threshold: { value: this.data.threshold }
+              keyColor: { value: new THREE.Color(this.data.color) },
+              threshold: { value: this.data.threshold },
+              padding: { value: this.data.padding }
             },
             vertexShader: `
               varying vec2 vUv;
@@ -43,17 +46,26 @@
             fragmentShader: `
               varying vec2 vUv;
               uniform sampler2D tex;
-              uniform vec3 color;
+              uniform vec3 keyColor;
               uniform float threshold;
+              uniform float padding;
               void main() {
-                vec4 tColor = texture2D(tex, vUv);
-                float dist = distance(tColor.rgb, color);
-                if (dist < threshold) { discard; }
-                gl_FragColor = tColor;
+                vec4 rgba = texture2D(tex, vUv);
+                float dist = distance(rgba.rgb, keyColor);
+                // Aplicamos un suavizado en el borde para evitar el negro/verde
+                float alpha = smoothstep(threshold, threshold + padding, dist);
+                gl_FragColor = vec4(rgba.rgb, alpha);
               }`,
-            transparent: true
+            transparent: true,
+            side: THREE.DoubleSide
           });
-          this.el.getObject3D('mesh').material = this.material;
+          
+          this.el.addEventListener('model-loaded', () => {
+            this.el.getObject3D('mesh').material = this.material;
+          });
+          // Forzar aplicación inmediata si es un a-video o a-plane
+          const mesh = this.el.getObject3D('mesh');
+          if (mesh) mesh.material = this.material;
         }
       });
     </script>
@@ -72,7 +84,7 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0">
-        <a-plane chromakey="color: 0 1 0; threshold: 0.8" width="1.5" height="1.5" position="0 0 0.01"></a-plane>
+        <a-plane chromakey="color: #00ff00; threshold: 0.3; padding: 0.1" width="1.5" height="1.5" position="0 0 0.01"></a-plane>
       </a-entity>
     </a-scene>
 
