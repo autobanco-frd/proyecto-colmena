@@ -16,6 +16,40 @@
       <button id="start-btn">INICIAR ESCANEO</button>
     </div>
 
+    <script>
+      AFRAME.registerComponent('chromakey', {
+        schema: { color: {type: 'color', default: '0 1 0'} },
+        init: function () {
+          const video = document.querySelector('#bee-vid');
+          const texture = new THREE.VideoTexture(video);
+          this.material = new THREE.ShaderMaterial({
+            uniforms: {
+              tex: { value: texture },
+              color: { value: new THREE.Color(this.data.color) }
+            },
+            vertexShader: `
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }`,
+            fragmentShader: `
+              varying vec2 vUv;
+              uniform sampler2D tex;
+              uniform vec3 color;
+              void main() {
+                vec4 tColor = texture2D(tex, vUv);
+                float dist = distance(tColor.rgb, color);
+                if (dist < 0.4) { discard; }
+                gl_FragColor = tColor;
+              }`,
+            transparent: true
+          });
+          this.el.getObject3D('mesh').material = this.material;
+        }
+      });
+    </script>
+
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no;" 
       color-space="sRGB" 
@@ -30,7 +64,7 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0">
-        <a-video src="#bee-vid" width="1" height="1" position="0 0 0"></a-video>
+        <a-plane chromakey="color: 0 1 0" width="1" height="1" position="0 0 0"></a-plane>
       </a-entity>
     </a-scene>
 
@@ -43,7 +77,9 @@
         overlay.style.display = "none";
         // Comando crítico para activar cámara y video simultáneamente
         sceneEl.systems["mindar-image-system"].start();
-        document.querySelector("#bee-vid").play();
+        const video = document.querySelector("#bee-vid");
+        video.muted = false;
+        video.play();
       });
     </script>
   </body>
