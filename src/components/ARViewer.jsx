@@ -13,15 +13,23 @@ const ARViewer = ({ onTargetFound, onTargetLost }) => {
     
     try {
       setIsLoading(true);
+      window.logger?.addLog('Iniciando proceso AR...', 'info');
       
       // Cargar MindAR desde CDN dinámicamente
+      window.logger?.addLog('Cargando MindAR desde CDN...', 'info');
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/mind-ar-three@latest/dist/mindar-image-three.prod.js';
       script.async = true;
       
       await new Promise((resolve, reject) => {
-        script.onload = resolve;
-        script.onerror = reject;
+        script.onload = () => {
+          window.logger?.addLog('MindAR cargado exitosamente', 'success');
+          resolve();
+        };
+        script.onerror = (error) => {
+          window.logger?.addLog(`Error cargando MindAR: ${error.message}`, 'error');
+          reject(error);
+        };
         document.head.appendChild(script);
       });
 
@@ -29,22 +37,52 @@ const ARViewer = ({ onTargetFound, onTargetLost }) => {
       const { MindARThree } = window;
       
       const videoElement = videoRef.current;
-      if (!videoElement) return;
+      if (!videoElement) {
+        const error = 'Elemento de video no encontrado';
+        window.logger?.addLog(error, 'error');
+        throw new Error(error);
+      }
+
+      // Cargar targets.mind
+      window.logger?.addLog('Cargando targets.mind...', 'info');
+      const targetsPath = './targets.mind';
+      window.logger?.addLog(`Ruta de marcadores: ${targetsPath}`, 'info');
 
       // Configurar MindAR con optimización de tracking
+      window.logger?.addLog('Configurando MindAR con parámetros optimizados...', 'info');
       const mindarThree = new MindARThree.MindARThree({
         container: document.body,
-        imageTargetSrc: './targets.mind', // Marcador hexagonal
-        missTolerance: 0.8, // Evita desaparición instantánea
-        filterMinCF: 0.0001, // Suavizado de jitter
-        filterBeta: 0.001,   // Suavizado de movimiento
+        imageTargetSrc: targetsPath,
+        missTolerance: 0.8,
+        filterMinCF: 0.0001,
+        filterBeta: 0.001,
       });
 
       mindarThreeRef.current = mindarThree;
+      window.logger?.addLog('MindAR configurado exitosamente', 'success');
 
       const { renderer, scene, camera } = mindarThree;
 
+      // Cargar video bee.mp4
+      window.logger?.addLog('Cargando video bee.mp4...', 'info');
+      const videoPath = './bee.mp4';
+      videoElement.src = videoPath;
+      window.logger?.addLog(`Ruta de video: ${videoPath}`, 'info');
+
+      // Esperar a que el video esté listo
+      await new Promise((resolve, reject) => {
+        videoElement.onloadeddata = () => {
+          window.logger?.addLog('Video cargado exitosamente', 'success');
+          resolve();
+        };
+        videoElement.onerror = (error) => {
+          window.logger?.addLog(`Error cargando video: ${error.message}`, 'error');
+          reject(error);
+        };
+      });
+
       // Crear material con shader para Chroma Key optimizado
+      window.logger?.addLog('Creando shader Chroma Key...', 'info');
       const vertexShader = `
         varying vec2 vUv;
         void main() {
@@ -88,8 +126,8 @@ const ARViewer = ({ onTargetFound, onTargetLost }) => {
       const shaderMaterial = new THREE.ShaderMaterial({
         uniforms: {
           uVideo: { value: videoTexture },
-          uThreshold: { value: 0.3 },  // Ajustable para limpiar bordes verdes
-          uSmoothing: { value: 0.05 }  // Suavizado de bordes
+          uThreshold: { value: 0.3 },
+          uSmoothing: { value: 0.05 }
         },
         vertexShader,
         fragmentShader,
@@ -102,23 +140,25 @@ const ARViewer = ({ onTargetFound, onTargetLost }) => {
 
       // Añadir a la escena
       scene.add(videoPlane);
+      window.logger?.addLog('Shader y plano de video creados', 'success');
 
       // Eventos de detección
       mindarThree.addVideo(videoElement);
       
       mindarThree.onTargetFound = (target) => {
-        console.log('Target encontrado:', target);
+        window.logger?.addLog(`Target encontrado: ${target.id || 'desconocido'}`, 'success');
         onTargetFound?.(target);
         videoPlane.visible = true;
       };
 
       mindarThree.onTargetLost = () => {
-        console.log('Target perdido');
+        window.logger?.addLog('Target perdido', 'warning');
         onTargetLost?.();
         videoPlane.visible = false;
       };
 
       // Iniciar AR y video simultáneamente (requiere acción del usuario)
+      window.logger?.addLog('Iniciando cámara y motor AR...', 'info');
       await Promise.all([
         mindarThree.start(),
         videoElement.play()
@@ -127,6 +167,7 @@ const ARViewer = ({ onTargetFound, onTargetLost }) => {
       videoPlane.visible = false;
       setIsStarted(true);
       setIsLoading(false);
+      window.logger?.addLog('AR iniciado exitosamente', 'success');
 
       // Loop de renderizado
       const animate = () => {
@@ -139,6 +180,9 @@ const ARViewer = ({ onTargetFound, onTargetLost }) => {
 
     } catch (err) {
       console.error('Error inicializando AR:', err);
+      const errorMessage = `Error AR: ${err.message}`;
+      window.logger?.addLog(errorMessage, 'error');
+      alert(errorMessage); // Alert con error técnico exacto
       setError(err.message);
       setIsLoading(false);
     }

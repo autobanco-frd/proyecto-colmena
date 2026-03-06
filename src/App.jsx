@@ -3,6 +3,7 @@ import HUD from './components/HUD';
 import ARViewer from './components/ARViewer';
 import SuccessAnimation from './components/SuccessAnimation';
 import SplashScreen from './components/SplashScreen';
+import Logger from './components/Logger';
 import { useNectar } from './hooks/useNectar';
 import { getMarkerContent } from './utils/supabase';
 
@@ -14,28 +15,40 @@ function App() {
 
   const handleEnterApp = useCallback(() => {
     setShowSplash(false);
+    window.logger?.addLog('Usuario entró a la app', 'success');
   }, []);
 
   const handleTargetFound = useCallback(async (target) => {
     console.log('Marcador detectado:', target);
+    window.logger?.addLog(`Marcador detectado: ${target.id}`, 'success');
     
     // Obtener contenido desde Supabase
-    const content = await getMarkerContent(target.id);
-    setCurrentMarker(content);
+    try {
+      const content = await getMarkerContent(target.id);
+      setCurrentMarker(content);
+      window.logger?.addLog(`Contenido cargado: ${content.title}`, 'success');
+    } catch (error) {
+      window.logger?.addLog(`Error cargando contenido: ${error.message}`, 'error');
+    }
     
     // Verificar si ya fue polinizado y añadir néctar
     const wasAdded = addNectar(target.id);
     if (wasAdded) {
       setShowSuccess(true);
+      window.logger?.addLog('Néctar añadido (+1)', 'success');
+    } else {
+      window.logger?.addLog('Marcador ya polinizado', 'warning');
     }
   }, [addNectar]);
 
   const handleTargetLost = useCallback(() => {
     console.log('Marcador perdido');
+    window.logger?.addLog('Marcador perdido', 'warning');
     setCurrentMarker(null);
   }, []);
 
   const handlePanic = useCallback(() => {
+    window.logger?.addLog('Botón de pánico activado', 'warning');
     // Redirigir a Wikipedia instantáneamente
     window.location.href = 'https://es.wikipedia.org/wiki/Wikipedia:Portada';
   }, []);
@@ -80,6 +93,9 @@ function App() {
           </p>
         </div>
       )}
+      
+      {/* Logger */}
+      <Logger />
     </div>
   );
 }
